@@ -245,6 +245,74 @@ class ContentVirtual:
     def is_addr_in(self, ad):
         return self.parent.is_in_virt_address(ad)
 
+class StrTable(object):
+    def __init__(self, c):
+        self.res = {}
+        self.names = {}
+        self.trail = ""
+        self.len = 0
+        while c:
+            p = c.find(pe.data_null)
+            if p < 0:
+                self.trail = c
+                break
+            self.res[self.len] = c[:p]
+            self.names[c[:p]] = self.len
+            self.len += p+1
+            c = c[p+1:]
+
+    def __str__(self):
+        raise AttributeError("Use pack() instead of str()")
+
+    def pack(self):
+        res = ""
+        k = self.res.keys()
+        k.sort()
+        for s in k:
+            if len(res) != s:
+                raise ValueError("StrTable is incoherent : %r != %r" %
+                                 (len(res), s))
+            res += self.res[s] + "\0"
+        return res + self.trail
+
+    def add(self, name):
+        if name in self.names:
+            return self.names[name]
+        self.res[self.len] = name
+        self.names[name] = self.len
+        self.len += len(name)+1
+
+    def rem(self, name):
+        #TODO
+        pass
+
+    def getby_name(self, name):
+        return self.names[name]
+    def getby_offset(self, of):
+        return self.res.get(of, "")
+
+class CoffSymbols(object):
+    def __init__(self, strpwk, of, numberofsymbols, parent):
+        self._sex = 0
+        self._wsize = 32
+        self.parent_head = parent
+        self.symbols = []
+        if numberofsymbols == 0:
+            raise ValueError("COFF header is not valid")
+        end = of + 18 * numberofsymbols
+        while of < end:
+            s = pe.CoffSymbol.unpack(strpwk, of, self)
+            self.symbols.append(s)
+            of += 18 * (1 + s.numberofauxsymbols)
+    def __str__(self):
+        raise AttributeError("Use pack() instead of str()")
+    def pack(self):
+        rep = data_empty
+        for s in self.symbols:
+            rep += s.pack()
+        return rep
+
+
 # PE object
 
 
@@ -480,6 +548,14 @@ class PE(object):
                                                    self)
                 except pe.InvalidOffset:
                     log.warning('cannot parse DirRes, skipping')
+        if self.Coffhdr.pointertosymboltable != 0:
+            self.SymbolStrings = StrTable(self.content[
+                                       self.Coffhdr.pointertosymboltable
+                                       + 18 * self.Coffhdr.numberofsymbols:])
+            self.Symbols = CoffSymbols(self.content,
+                                       self.Coffhdr.pointertosymboltable,
+                                       self.Coffhdr.numberofsymbols,
+                                       self)
 
     def resize(self, old, new):
         pass
