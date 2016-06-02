@@ -3,6 +3,9 @@
 import struct
 import re
 
+data_empty = struct.pack("")
+data_null = struct.pack("B",0)
+
 type2realtype = {}
 size2type = {}
 size2type_s = {}
